@@ -14,7 +14,9 @@ root_dir = os.path.dirname(backend_dir)
 load_dotenv(os.path.join(root_dir, ".env"))
 
 def GPT_Process_PDFs(pdf_contents: List[str], filenames: List[str] = None):
-    system_instructions = """You are a document review assistant. Analyze the document SENTENCE BY SENTENCE and:
+    system_instructions = """
+    
+    You are a document review assistant. Analyze the document SENTENCE BY SENTENCE and:
 
         For each document:
     1. First, read and understand the entire document to grasp its overall purpose, structure, and context.
