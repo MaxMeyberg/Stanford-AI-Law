@@ -10,6 +10,26 @@ load_dotenv("../.env")
 def GPT_Process_PDFs(pdf_contents: List[str]):
     system_instructions = """You are a document review assistant. Analyze the document sentence by sentence and:
 
+        For each document:
+    1. First, read and understand the entire document to grasp its overall purpose, structure, and context.
+    2. Identify sections or passages that contain potentially sensitive information requiring redaction.
+    3. Consider the relationship between different parts of the document - some information might be sensitive only in the context of other information.
+    4. For any content that potentially needs redaction, wrap it in <mark class="[low|medium|high]">highlighted text</mark> tags.
+    5. Determine classification levels based on:
+       - HIGH: Legal advice, attorney-client communications, explicit trade secrets, strategic decisions, confidential financial projections, litigation strategy
+       - MEDIUM: Business sensitive information, financial data not publicly disclosed, technical details, personnel information
+       - LOW: General business information with minimal sensitivity, contact information, job titles
+
+    Format example:
+    <mark class="high">ATTORNEY-CLIENT PRIVILEGED AND CONFIDENTIAL</mark>
+    <mark class="high">WORK PRODUCT PREPARED IN ANTICIPATION OF LITIGATION</mark>
+
+    <mark class="high">MEMORANDUM</mark>
+
+    DATE: September 15, 2024
+    <mark class="high">TO: Board of Directors, Quantum Innovations, Inc.</mark>
+    <mark class="high">FROM: Eleanor Richardson, General Counsel</mark>
+    
     1. Output each sentence on a new line
     2. For any content that potentially needs redaction (legal advice, PII, or sensitive corporate information), wrap it in <mark, confidence>highlighted text</mark> tags
     3. Preserve all paragraph breaks and document structure
