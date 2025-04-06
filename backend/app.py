@@ -77,6 +77,11 @@ def process_documents():
         logger.error("No files provided in request")
         return jsonify({'error': 'No files provided'}), 400
     
+    # Get optional context from the form
+    context = request.form.get('context', '')
+    if context:
+        logger.info(f"Received context: {context[:100]}...")
+    
     # Log file details
     for file in files:
         logger.info(f"Processing file: {file.filename}, Content-Type: {file.content_type}")
@@ -87,7 +92,11 @@ def process_documents():
         try:
             # Convert to PDF and process with GPT in one step
             logger.info(f"Starting processing of file: {file.filename}")
-            file_results = process_file_for_gpt(file, GPT_Process_PDFs)
+            
+            # Pass the context if provided
+            logger.debug("Converting file to PDF and extracting text")
+            file_results = process_file_for_gpt(file, GPT_Process_PDFs, file.filename)
+            
             logger.info(f"Processing complete for file: {file.filename}")
             
             # Add results to the list
@@ -108,6 +117,23 @@ def process_documents():
                     pdf_url = url_for('uploaded_file', filename=pdf_filename)
                     result['pdf_url'] = pdf_url
                     logger.info(f"PDF URL added to result: {pdf_url}")
+                
+                # Add filename if not already present
+                if 'filename' not in result:
+                    result['filename'] = file.filename
+                
+                # Log highlighting statistics
+                if 'marked_content' in result:
+                    html_content = result['marked_content']
+                    low_count = html_content.count('<mark class="low">')
+                    medium_count = html_content.count('<mark class="medium">')
+                    high_count = html_content.count('<mark class="high">')
+                    
+                    logger.info(f"Highlighting statistics for {file.filename}:")
+                    logger.info(f"  - Low sensitivity: {low_count} marks")
+                    logger.info(f"  - Medium sensitivity: {medium_count} marks")
+                    logger.info(f"  - High sensitivity: {high_count} marks")
+                    logger.info(f"  - Total highlights: {low_count + medium_count + high_count}")
                 
                 results.append(result)
                 
@@ -152,9 +178,9 @@ if __name__ == '__main__':
         .document-container { margin-bottom: 40px; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
         .pdf-viewer { width: 100%; height: 600px; border: 1px solid #ccc; margin-bottom: 20px; }
         .highlighted-text { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
-        mark.low { background-color: yellow; }
-        mark.medium { background-color: orange; }
-        mark.high { background-color: red; }
+        mark.low { background-color: yellow; padding: 2px 0; border-radius: 2px; }
+        mark.medium { background-color: orange; padding: 2px 0; border-radius: 2px; }
+        mark.high { background-color: red; padding: 2px 0; border-radius: 2px; color: white; }
         .legend { margin-top: 10px; font-size: 14px; }
         .legend-item { display: inline-block; margin-right: 20px; }
         .legend-color { display: inline-block; width: 20px; height: 14px; margin-right: 5px; vertical-align: middle; }
@@ -170,6 +196,7 @@ if __name__ == '__main__':
         <h2>Upload Documents</h2>
         <form id="uploadForm" enctype="multipart/form-data">
             <input type="file" id="fileInput" name="files" multiple accept=".pdf,.docx,.xlsx">
+            <textarea id="contextInput" placeholder="Optional: Provide additional context about the document..." rows="3" style="width: 100%; margin-top: 10px;"></textarea>
             <button type="submit">Analyze Documents</button>
         </form>
     </div>
@@ -182,9 +209,15 @@ if __name__ == '__main__':
             
             const formData = new FormData();
             const fileInput = document.getElementById('fileInput');
+            const contextInput = document.getElementById('contextInput');
             
             for (let i = 0; i < fileInput.files.length; i++) {
                 formData.append('files', fileInput.files[i]);
+            }
+            
+            // Add context if provided
+            if (contextInput.value.trim()) {
+                formData.append('context', contextInput.value);
             }
             
             document.getElementById('results').innerHTML = '<p>Processing documents... This may take a while.</p>';
@@ -226,6 +259,21 @@ if __name__ == '__main__':
                                     <iframe class="pdf-viewer" src="${result.pdf_url}"></iframe>
                                 `;
                             }
+                            
+                            // Count highlights
+                            const content = result.marked_content || '';
+                            const lowCount = (content.match(/<mark class="low">/g) || []).length;
+                            const mediumCount = (content.match(/<mark class="medium">/g) || []).length;
+                            const highCount = (content.match(/<mark class="high">/g) || []).length;
+                            const totalCount = lowCount + mediumCount + highCount;
+                            
+                            // Display highlight counts
+                            resultsHTML += `
+                                <div class="highlight-counts">
+                                    <p><strong>Highlight Counts:</strong></p>
+                                    <p>Low Sensitivity: ${lowCount} | Medium Sensitivity: ${mediumCount} | High Sensitivity: ${highCount} | Total: ${totalCount}</p>
+                                </div>
+                            `;
                             
                             // Display highlighted text
                             resultsHTML += `

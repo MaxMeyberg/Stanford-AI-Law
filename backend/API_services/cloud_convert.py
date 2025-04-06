@@ -176,6 +176,13 @@ def convert_to_pdf_and_extract_text(file_object, filename=None):
         elif isinstance(file_object, str) and os.path.exists(file_object):
             # Handle file paths
             temp_input_path = file_object
+        elif hasattr(file_object, 'read') and callable(file_object.read):
+            # Handle standard file objects (like those returned by open())
+            temp_input_path = os.path.join(temp_dir, os.path.basename(file_name))
+            with open(temp_input_path, 'wb') as f:
+                f.write(file_object.read())
+                # Reset the file pointer to the beginning for potential further use
+                file_object.seek(0)
         else:
             raise ValueError("Unsupported file object type")
         
