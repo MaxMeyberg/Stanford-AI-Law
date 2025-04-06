@@ -5,7 +5,13 @@ from typing import List
 import json
 import os
 
-load_dotenv("../.env")
+# Get absolute path to the backend directory
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.dirname(current_dir)
+root_dir = os.path.dirname(backend_dir)
+
+# Load environment variables from the root .env file
+load_dotenv(os.path.join(root_dir, ".env"))
 
 def GPT_Process_PDFs(pdf_contents: List[str], filenames: List[str] = None):
     system_instructions = """You are a document review assistant. Analyze the document sentence by sentence and:
@@ -116,7 +122,14 @@ def GPT_Process_PDFs(pdf_contents: List[str], filenames: List[str] = None):
     
     """
 
-    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # Use the API key name from the .env file (OPEN_AI_API_KEY instead of OPENAI_API_KEY)
+    api_key = os.getenv("OPEN_AI_API_KEY")
+    if not api_key:
+        print("WARNING: OPEN_AI_API_KEY not found in environment variables")
+        print("Current environment variables:", [k for k in os.environ.keys() if 'API' in k])
+        raise ValueError("OpenAI API key not found in environment variables")
+        
+    client = OpenAI(api_key=api_key)
     
     #TODO: Ask Yaroslav how to input pdfs
     results = []
@@ -147,7 +160,7 @@ def GPT_Process_PDFs(pdf_contents: List[str], filenames: List[str] = None):
             
             # Call OpenAI API
             response = client.chat.completions.create(
-                model="o1",
+                model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": system_instructions},
                     {"role": "user", "content": content}

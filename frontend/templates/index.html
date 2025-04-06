@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Document Analysis Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .upload-container { border: 2px dashed #ccc; padding: 20px; text-align: center; }
+        .results { margin-top: 20px; }
+        .highlighted-text { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
+        mark.low { background-color: yellow; }
+        mark.medium { background-color: orange; }
+        mark.high { background-color: red; }
+    </style>
+</head>
+<body>
+    <h1>Document Analysis Tool</h1>
+    
+    <div class="upload-container">
+        <h2>Upload Documents</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" id="fileInput" name="files" multiple accept=".pdf,.docx,.xlsx">
+            <button type="submit">Analyze Documents</button>
+        </form>
+    </div>
+    
+    <div class="results" id="results"></div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const fileInput = document.getElementById('fileInput');
+            
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files', fileInput.files[i]);
+            }
+            
+            document.getElementById('results').innerHTML = '<p>Processing documents... This may take a while.</p>';
+            
+            try {
+                const response = await fetch('/api/process-documents', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                let resultsHTML = '<h2>Analysis Results</h2>';
+                
+                if (data.length === 0) {
+                    resultsHTML += '<p>No results returned.</p>';
+                } else {
+                    data.forEach(result => {
+                        resultsHTML += `<h3>Results for ${result.filename}</h3>`;
+                        
+                        if (result.error) {
+                            resultsHTML += `<p>Error: ${result.error}</p>`;
+                        } else {
+                            resultsHTML += `<div class="highlighted-text">${result.marked_content}</div>`;
+                        }
+                    });
+                }
+                
+                document.getElementById('results').innerHTML = resultsHTML;
+                
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>
