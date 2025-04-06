@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import logging
 from flask_cors import CORS
 from flask import Flask, request, jsonify, send_from_directory, render_template, url_for
 import PyPDF2
@@ -8,13 +9,17 @@ import PyPDF2
 from API_services.gpt import GPT_Process_PDFs
 from API_services.cloud_convert import process_file_for_gpt
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 # Create Flask app
 app = Flask(__name__, 
             static_folder='../frontend/static',
             template_folder='../frontend/templates')
 
-# Enable CORS for all routes
-CORS(app, resources={r"/*": {"origins": "*"}})
+# Enable CORS for all routes and all domains
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 # Create a directory to store uploaded PDFs
 UPLOAD_FOLDER = os.path.join('..', 'frontend', 'static', 'uploads')
@@ -36,24 +41,54 @@ def index():
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
     """Serve uploaded files"""
+    if filename.endswith('.pdf'):
+        logger.info(f"Serving PDF file: {filename}")
+        response = send_from_directory(UPLOAD_FOLDER, filename, mimetype='application/pdf')
+        # Add headers to help with caching and display
+        response.headers['Content-Disposition'] = f'inline; filename="{filename}"'
+        response.headers['Cache-Control'] = 'no-cache'
+        return response
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-@app.route('/api/process-documents', methods=['POST'])
+@app.route('/api/process-documents', methods=['POST', 'OPTIONS'])
 def process_documents():
     """Process documents using CloudConvert and GPT"""
-    # Get files from request
-    files = request.files.getlist('files')
+    # Handle preflight CORS request
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    # Log the request details
+    logger.info(f"Received request to process documents")
+    logger.debug(f"Request headers: {request.headers}")
+    logger.debug(f"Request form data: {request.form}")
+    logger.debug(f"Request files: {list(request.files.keys())}")
+    
+    # Get files from request - handle both 'files' and 'file' keys
+    files = []
+    if 'files' in request.files:
+        files = request.files.getlist('files')
+        logger.info(f"Found {len(files)} files under 'files' key")
+    elif 'file' in request.files:
+        files = [request.files['file']]
+        logger.info(f"Found 1 file under 'file' key")
     
     # Error handling
     if not files or all(not file.filename for file in files):
+        logger.error("No files provided in request")
         return jsonify({'error': 'No files provided'}), 400
+    
+    # Log file details
+    for file in files:
+        logger.info(f"Processing file: {file.filename}, Content-Type: {file.content_type}")
     
     # Process files one at a time
     results = []
     for file in files:
         try:
             # Convert to PDF and process with GPT in one step
+            logger.info(f"Starting processing of file: {file.filename}")
             file_results = process_file_for_gpt(file, GPT_Process_PDFs)
+            logger.info(f"Processing complete for file: {file.filename}")
             
             # Add results to the list
             if file_results and len(file_results) > 0:
@@ -66,16 +101,19 @@ def process_documents():
                     pdf_destination = os.path.join(UPLOAD_FOLDER, pdf_filename)
                     
                     # Copy the PDF to the static folder
+                    logger.info(f"Copying PDF from {result['pdf_path']} to {pdf_destination}")
                     os.rename(result['pdf_path'], pdf_destination)
                     
                     # Add PDF URL to the result
-                    result['pdf_url'] = url_for('uploaded_file', filename=pdf_filename)
+                    pdf_url = url_for('uploaded_file', filename=pdf_filename)
+                    result['pdf_url'] = pdf_url
+                    logger.info(f"PDF URL added to result: {pdf_url}")
                 
                 results.append(result)
                 
         except Exception as e:
             # Log the error but continue processing other files
-            print(f"Error processing file {file.filename}: {str(e)}")
+            logger.error(f"Error processing file {file.filename}: {str(e)}", exc_info=True)
             # Add error to results
             results.append({
                 "filename": file.filename,
@@ -83,7 +121,17 @@ def process_documents():
                 "marked_content": f"<p>Error processing file: {str(e)}</p>"
             })
     
+    # Log the response
+    logger.info(f"Returning {len(results)} results")
     return jsonify(results)
+
+@app.after_request
+def after_request(response):
+    """Add CORS headers to every response"""
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 if __name__ == '__main__':
     # Create directories if they don't exist
@@ -200,4 +248,5 @@ if __name__ == '__main__':
 </body>
 </html>''')
     
-    app.run(debug=True, port=5001)
+    logger.info("Starting Flask server on port 5001")
+    app.run(debug=True, port=5001, host='0.0.0.0')

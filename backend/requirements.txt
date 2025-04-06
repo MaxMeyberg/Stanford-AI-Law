@@ -8,3 +8,4 @@ pandas>=2.2.1
 cloudconvert==2.1.0
 openai==1.68.0
 requests==2.31.0
+pycryptodome
